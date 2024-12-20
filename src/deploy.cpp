@@ -23,10 +23,9 @@ DEFINE_HOOK(0x730B09, DeployCommandClass_Execute_BuildingDeploy, 0x5)
 		if (pBuilding->GetOccupantCount() > 0 ||
 			pBuilding->Type->GapGenerator ||
 			(pBuilding->Passengers.NumPassengers > 0 &&
-			pBuilding->Type->Factory == AbstractType::None &&
 			(pBuilding->Type->UnitAbsorb || pBuilding->Type->InfantryAbsorb)))
 		{
-			pBuilding->ClickedMission(Mission::Unload, nullptr, nullptr, nullptr);
+			pBuilding->ClickedMission(Mission::Unload, pBuilding->Type->GapGenerator ? pBuilding : nullptr, nullptr, nullptr);
 			continue;
 		}
 	}

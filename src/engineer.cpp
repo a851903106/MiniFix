@@ -175,18 +175,6 @@ DEFINE_HOOK(0x4389BD, BombClass_Disarm_Engineer, 0x6)
 		{
 			auto const pFoot = abstract_cast<FootClass*>(pTechno);
 
-			if (pFoot && (pFoot->Target == pTarget || pFoot->Destination == pTarget))
-			{
-				if (auto const pTeam = pFoot->Team)
-				{
-					if (pTeam->Focus == pTarget)
-					{
-						pTeam->SetFocus(nullptr);
-						pTeam->StepCompleted = true;
-					}
-				}
-			}
-
 			if (pTechno->Target == pTarget)
 			{
 				if (pTechno->Passengers.NumPassengers > 0 &&
@@ -197,6 +185,18 @@ DEFINE_HOOK(0x4389BD, BombClass_Disarm_Engineer, 0x6)
 					pTechno->SpawnManager->ResetTarget();
 
 				pTechno->SetTarget(nullptr);
+
+				if (pFoot)
+				{
+					if (auto const pTeam = pFoot->Team)
+					{
+						if (pTeam->Focus == pTarget)
+						{
+							pTeam->SetFocus(nullptr);
+							pTeam->StepCompleted = true;
+						}
+					}
+				}
 			}
 
 			if (pFoot && pFoot->Destination == pTarget)
@@ -330,14 +330,18 @@ DEFINE_HOOK(0x70924B, sub_7091D0_EngineerAttack, 0x8)
 DEFINE_HOOK(0x6F37AF, TecnoClass_SelectWeapon_EngineerAttack, 0x7)
 {
 	GET(TechnoClass*, pThis, ESI);
-	GET(AbstractClass*, pTarget, EDI);
+	GET_STACK(AbstractClass*, pTarget, STACK_OFFSET(0x18, 0x4));
 
-	if (pTarget && pTarget->AbstractFlags & AbstractFlags::Techno)
+	if (!pThis || !pTarget)
+		return 0;
+
+	if (auto const pTechno = abstract_cast<TechnoClass*>(pTarget))
 	{
 		if (auto const pWeaponType = pThis->GetWeapon(0)->WeaponType)
 		{
-			if (pWeaponType && pWeaponType->Warhead && pWeaponType->Warhead->BombDisarm &&
-				!abstract_cast<TechnoClass*>(pTarget)->AttachedBomb)
+			if (pWeaponType && pWeaponType->Warhead &&
+				pWeaponType->Warhead->BombDisarm &&
+				pTechno->AttachedBomb)
 			{
 				if (pThis->GetWeapon(1)->WeaponType)
 					R->EAX(1);

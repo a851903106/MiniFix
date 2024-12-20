@@ -19,12 +19,12 @@ BEGIN
   BEGIN
    VALUE "ProductName", "mini fix patch DLL\0"
    VALUE "CompanyName", "The MiniFix\0"
-   VALUE "LegalCopyright", "飞星如梦 © 2024"
+   VALUE "LegalCopyright", "飞星如梦 ?? 2024"
    VALUE "FileDescription", FILE_DESCRIPTION "\0"
    VALUE "FileVersion", FILE_VERSION_STR "\0"
    VALUE "ProductVersion", PRODUCT_VERSION "\0"
    VALUE "InternalName", "minifix.dll\0"
-   VALUE "OriginalFilename", "mf.dll\0"
+   VALUE "OriginalFilename", "MF.dll\0"
 
   END
  END
