@@ -93,7 +93,7 @@ bool EngineerAllow(InfantryClass* pThis, TechnoClass* pTechno, bool allowEnter)
 // 这里不欢迎名为邻座艾莉同学的石灰级玩家
 bool EngineerCanTargetObject(TechnoClass* pThis, TechnoClass* pTarget)
 {
-	bool isAllies = pThis->Owner->IsAlliedWith(pTarget);
+	bool isAllies = pThis->Owner->IsAlliedWith(pTarget->Owner);
 	int index = pThis->SelectWeapon(pTarget);
 	FireError fireError = pThis->GetFireErrorWithoutRange(pTarget, index);
 
@@ -135,25 +135,34 @@ bool EngineerCanTargetObject(TechnoClass* pThis, TechnoClass* pTarget)
 			if (needRepair || pTarget->GetTechnoType()->AttackFriendlies)
 				return true;
 		}
-		else if (!pTarget->Disguised ||
-			pThis->GetTechnoType()->DetectDisguise ||
-			!pThis->Owner->IsAlliedWith(pTarget->DisguisedAsHouse))
+		else 
 		{
-			if (!pTarget->GetTechnoType()->Insignificant &&
-				!pTarget->Owner->Type->MultiplayPassive)
-			{
-				if (pTarget->WhatAmI() == AbstractType::Building &&
-					pTarget->GetWeapon(0)->WeaponType &&
-					pTarget->GetThreatValue() > 0)
-					return true;
+			if (pTarget->AttachedBomb &&
+				pWeaponType &&
+				pWeaponType->Warhead &&
+				pWeaponType->Warhead->BombDisarm)
+				return false;
 
-				if (pTarget->WhatAmI() != AbstractType::Building)
-					return true;
+			if (!pTarget->Disguised ||
+				pThis->GetTechnoType()->DetectDisguise ||
+				!pThis->Owner->IsAlliedWith(pTarget->DisguisedAsHouse))
+			{
+				if (!pTarget->GetTechnoType()->Insignificant &&
+					!pTarget->Owner->Type->MultiplayPassive)
+				{
+					if (pTarget->WhatAmI() == AbstractType::Building &&
+						pTarget->GetWeapon(0)->WeaponType &&
+						pTarget->GetThreatValue() > 0)
+						return true;
+
+					if (pTarget->WhatAmI() != AbstractType::Building)
+						return true;
+				}
 			}
 		}
 	}
 
-	return needRepair && inRange;
+	return (!isAllies || pThis->GetTechnoType()->AttackFriendlies) && inRange;
 }
 
 // 这里不欢迎名为邻座艾莉同学的石灰级玩家
@@ -161,46 +170,49 @@ DEFINE_HOOK(0x4389BD, BombClass_Disarm_Engineer, 0x6)
 {
 	GET(ObjectClass*, pTarget, EAX);
 
-	for (const auto pTechno : *TechnoClass::Array())
+	if (TechnoClass* pTargetTechno = abstract_cast<TechnoClass*>(pTarget))
 	{
-		if (!pTechno || pTechno == pTarget ||
-			!pTechno->Owner->IsAlliedWith(pTarget))
-			continue;
-
-		auto const index = pTechno->SelectWeapon(pTarget);
-		auto const pWeaponType = pTechno->GetWeapon(index) ?
-			pTechno->GetWeapon(index)->WeaponType : nullptr;
-
-		if (pWeaponType && pWeaponType->Warhead && pWeaponType->Warhead->BombDisarm)
+		for (const auto pTechno : *TechnoClass::Array())
 		{
-			auto const pFoot = abstract_cast<FootClass*>(pTechno);
+			if (!pTechno || pTechno == pTargetTechno ||
+				!pTechno->Owner->IsAlliedWith(pTargetTechno->Owner))
+				continue;
 
-			if (pTechno->Target == pTarget)
+			auto const index = pTechno->SelectWeapon(pTargetTechno);
+			auto const pWeaponType = pTechno->GetWeapon(index) ?
+				pTechno->GetWeapon(index)->WeaponType : nullptr;
+
+			if (pWeaponType && pWeaponType->Warhead && pWeaponType->Warhead->BombDisarm)
 			{
-				if (pTechno->Passengers.NumPassengers > 0 &&
-					pTechno->GetTechnoType()->OpenTopped)
-					pTechno->SetTargetForPassengers(nullptr);
+				auto const pFoot = abstract_cast<FootClass*>(pTechno);
 
-				if (pTechno->SpawnManager)
-					pTechno->SpawnManager->ResetTarget();
-
-				pTechno->SetTarget(nullptr);
-
-				if (pFoot)
+				if (pTechno->Target == pTargetTechno)
 				{
-					if (auto const pTeam = pFoot->Team)
+					if (pTechno->Passengers.NumPassengers > 0 &&
+						pTechno->GetTechnoType()->OpenTopped)
+						pTechno->SetTargetForPassengers(nullptr);
+
+					if (pTechno->SpawnManager)
+						pTechno->SpawnManager->ResetTarget();
+
+					pTechno->SetTarget(nullptr);
+
+					if (pFoot)
 					{
-						if (pTeam->Focus == pTarget)
+						if (auto const pTeam = pFoot->Team)
 						{
-							pTeam->SetFocus(nullptr);
-							pTeam->StepCompleted = true;
+							if (pTeam->Focus == pTargetTechno)
+							{
+								pTeam->SetFocus(nullptr);
+								pTeam->StepCompleted = true;
+							}
 						}
 					}
 				}
-			}
 
-			if (pFoot && pFoot->Destination == pTarget)
-				pFoot->SetDestination(nullptr, true);
+				if (pFoot && pFoot->Destination == pTargetTechno)
+					pFoot->SetDestination(nullptr, true);
+			}
 		}
 	}
 
@@ -215,7 +227,7 @@ DEFINE_HOOK(0x51B2BD, InfantryClass_UpdateTarget_Enigneer, 0x6)
 {
 	GET(InfantryClass*, pThis, ESI);
 	GET_STACK(AbstractClass*, pTarget, STACK_OFFSET(0xC, 0x4));
-	enum { SkipGameCode = 0x51B33F, Continue = 0x51B2CB };
+	enum { SkipGameCode = 0x51B33F };
 
 	if (!pThis || !pTarget ||
 		pThis == pTarget ||
@@ -227,19 +239,33 @@ DEFINE_HOOK(0x51B2BD, InfantryClass_UpdateTarget_Enigneer, 0x6)
 	{
 		auto const pBuilding = abstract_cast<BuildingClass*>(pTarget);
 
-		if (pThis->Owner->IsAlliedWith(pBuilding) &&
-			pBuilding->Health < pBuilding->Type->Strength &&
-			!pBuilding->Type->BridgeRepairHut &&
-			pBuilding->Type->Repairable)
+		if (pThis->Owner->IsAlliedWith(pBuilding->Owner))
 		{
-			pThis->QueueMission(Mission::Capture, false);
-			pThis->NextMission();
-			pThis->SetDestination(pBuilding, true);
-			return SkipGameCode;
+			if (pBuilding->Health < pBuilding->Type->Strength &&
+				!pBuilding->Type->BridgeRepairHut &&
+				pBuilding->Type->Repairable)
+			{
+				pThis->QueueMission(Mission::Capture, false);
+				pThis->NextMission();
+				pThis->SetDestination(pBuilding, true);
+				pThis->SetTarget(nullptr);
+			}
 		}
+		else
+		{
+			if (pBuilding->Type->Capturable)
+			{
+				pThis->QueueMission(Mission::Capture, false);
+				pThis->NextMission();
+				pThis->SetDestination(pBuilding, true);
+				pThis->SetTarget(nullptr);
+			}
+		}
+
+		return SkipGameCode;
 	}
 
-	return !pThis->Type->Infiltrate ? SkipGameCode : Continue;
+	return 0;
 }
 
 // 这里不欢迎名为邻座艾莉同学的石灰级玩家
@@ -341,7 +367,11 @@ DEFINE_HOOK(0x6F37AF, TecnoClass_SelectWeapon_EngineerAttack, 0x7)
 		{
 			if (pWeaponType && pWeaponType->Warhead &&
 				pWeaponType->Warhead->BombDisarm &&
-				!pTechno->AttachedBomb)
+				(!pTechno->AttachedBomb ||
+				(!pThis->Owner->ControlledByHuman() &&
+				!pThis->Owner->IsAlliedWith(pTechno->Owner) &&
+				(pTechno->WhatAmI() != AbstractType::Building ||
+				!abstract_cast<BuildingClass*>(pTechno)->Type->BridgeRepairHut))))
 			{
 				if (pThis->GetWeapon(1)->WeaponType)
 					R->EAX(1);
