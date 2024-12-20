@@ -341,7 +341,7 @@ DEFINE_HOOK(0x6F37AF, TecnoClass_SelectWeapon_EngineerAttack, 0x7)
 		{
 			if (pWeaponType && pWeaponType->Warhead &&
 				pWeaponType->Warhead->BombDisarm &&
-				pTechno->AttachedBomb)
+				!pTechno->AttachedBomb)
 			{
 				if (pThis->GetWeapon(1)->WeaponType)
 					R->EAX(1);
