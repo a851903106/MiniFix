@@ -1,141 +1,212 @@
 #include "theme.h"
 #include <Helpers/Macro.h>
-
+#include <GameStrings.h>
 #include <CCINIClass.h>
 #include <HouseClass.h>
 #include <ThemeClass.h>
 #include <StringTable.h>
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
 std::vector<std::unique_ptr<ThemeExt>> ThemeExt::Array;
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
-void ThemeExt::LoadINI(CCINIClass* pINI, const char* pSection)
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
+void __forceinline LoadFromINI()
 {
-	pINI->ReadString(pSection, "Next", "", this->NextText);
-	pINI->ReadString(pSection, "Previous", "", this->PreviousText);
-	pINI->ReadString(pSection, "RequiredHouses", "", this->HousesText);
-	pINI->ReadString(pSection, "ForbiddenHouses", "", this->NegHousesText);
-	this->Side = pINI->ReadSide(pSection, "Side", -1);
+	CCINIClass* pThemeINI = CCINIClass::LoadINIFile(GameStrings::THEMEMD_INI);
 
-	pINI->ReadString(pSection, "Name", "", this->UIName);
-	this->Normal = pINI->ReadBool(pSection, "Normal", this->Normal);
-	this->Repeat = pINI->ReadBool(pSection, "Repeat", this->Repeat);
+	if (!ThemeExt::Array.empty())
+	{
+		for (auto& ThemeExt : ThemeExt::Array)
+		{
+			ThemeExt->LoadINI(pThemeINI);
+		}
+	}
+
+	CCINIClass::UnloadINIFile(pThemeINI);
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
-DEFINE_HOOK(0x406FC6, sub_406F70_ThemeClass_AI_Skip, 0x5)
+int __forceinline FindIndex(const char* Name)
 {
-	return 0x406FD0;
+	if (!ThemeExt::Array.empty())
+	{
+		for (size_t index = 0; index < ThemeExt::Array.size(); index++)
+		{
+			if (!strcmp(ThemeExt::Array[index]->Name.c_str(), Name))
+				return index;
+		}
+	}
+
+	return -1;
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
-DEFINE_HOOK(0x406FE2, sub_406F70_ThemeClass_AI, 0xA)
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
+void ThemeExt::LoadINI(CCINIClass* pINI)
 {
-	ThemeClass::Instance->AI();
-	return 0;
+	const char* pSection = this->Name.c_str();
+	char readBuffer[2048];
+
+	pINI->ReadBool(pSection, "Repeat", this->Repeat);
+
+	pINI->ReadString(pSection, "Next", "", readBuffer);
+	if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+	{
+		this->Next = FindIndex(readBuffer);
+	}
+
+	pINI->ReadString(pSection, "Previous", "", readBuffer);
+	if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+	{
+		this->Previous = FindIndex(readBuffer);
+	}
+
+	auto Exists = [](std::vector<int>* pVector, int index)
+	{
+		if (!pVector->empty())
+		{
+			for (const int currentIndex : *pVector)
+			{
+				if (currentIndex != index)
+					continue;
+
+				return true;
+			}
+		}
+
+		return false;
+	};
+
+	pINI->ReadString(pSection, "Sides", "", readBuffer);
+	if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+	{
+		this->Side = -1;
+		this->Sides.clear();
+		char* context = nullptr;
+
+		for (char* cur = strtok_s(readBuffer, ",", &context); cur; cur = strtok_s(nullptr, readBuffer, &context))
+		{
+			const int sideIndex = SideClass::FindIndex(cur);
+
+			if (!Exists(&this->Sides, sideIndex))
+				this->Sides.push_back(sideIndex);
+		}
+	}
+	else 
+	{
+		pINI->ReadString(pSection, "Side", "", readBuffer);
+		if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+		{
+			this->Sides.clear();
+			this->Side = SideClass::FindIndex(readBuffer);
+		}
+	}
+
+	pINI->ReadString(pSection, "RequiredHouses", "", readBuffer);
+	if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+	{
+		this->Houses.clear();
+		char* context = nullptr;
+
+		for (char* cur = strtok_s(readBuffer, ",", &context); cur; cur = strtok_s(nullptr, readBuffer, &context))
+		{
+			if (const auto pHouseType = HouseTypeClass::Find(cur))
+			{
+				const int houseIndex = pHouseType->GetArrayIndex();
+
+				if (!Exists(&this->Houses, houseIndex))
+					this->Houses.push_back(houseIndex);
+			}
+		}
+	}
+
+	pINI->ReadString(pSection, "ForbiddenHouses", "", readBuffer);
+	if (strcmp(readBuffer, "") || INIClass::IsBlank(readBuffer))
+	{
+		this->NegHouses.clear();
+		char* context = nullptr;
+
+		for (char* cur = strtok_s(readBuffer, ",", &context); cur; cur = strtok_s(nullptr, readBuffer, &context))
+		{
+			if (const auto pHouseType = HouseTypeClass::Find(cur))
+			{
+				const int houseIndex = pHouseType->GetArrayIndex();
+
+				if (!Exists(&this->NegHouses, houseIndex))
+					this->NegHouses.push_back(houseIndex);
+			}
+		}
+	}
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
 DEFINE_HOOK(0x7206FB, ThemeClass_CreateExt, 0x8)
 {
-	GET_STACK(CCINIClass*, pINI, STACK_OFFSET(0x38, 0x4));
 	GET(char*, pSection, EBP);
 
-	ThemeExt::Array.push_back(std::make_unique<ThemeExt>());
-	ThemeExt::Array.at(int(ThemeExt::Array.size() - 1))->LoadINI(pINI, pSection);
-
+	ThemeExt::Array.push_back(std::make_unique<ThemeExt>(pSection));
 	return 0;
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
-DEFINE_HOOK(0x721171, ThemeClass_IsAvailable_Rewrite, 0x6)
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
+DEFINE_HOOK(0x72118A, ThemeClass_IsAvailable_Rewrite, 0x6)
 {
 	GET_STACK(int, index, 0x4);
 	enum { ReturnFalse = 0x72117B, ReturnTrue = 0x7211CE };
 
-	auto const ThemeExt = (index >= 0 && int(ThemeExt::Array.size()) > index) ?
-		&ThemeExt::Array.at(index) : nullptr;
+	auto const pThemeExt = (index >= 0 && int(ThemeExt::Array.size()) > index) ?
+		ThemeExt::Array.at(index).get() : nullptr;
 
-	if (!ThemeExt)
-		return ReturnFalse;
-
-	auto const& pThemeExt = *ThemeExt;
-
-	if (!pThemeExt->Normal)
+	if (!pThemeExt)
 		return ReturnFalse;
 
 	auto const pPlayer = HouseClass::Player();
-	if (!pPlayer)
-		return ReturnFalse;
+	const int sideIndex = pPlayer->Type->SideIndex;
+	const auto pSides = &pThemeExt->Sides;
 
-	if (pThemeExt->Side >= 0 && pPlayer->Type->SideIndex != pThemeExt->Side)
-		return ReturnFalse;
-
-	if (strcmp(pThemeExt->HousesText, ""))
+	auto Contains = [](std::vector<int>* pVector, int index)
 	{
-		char* context = nullptr;
-		char readBuffer[2048];
-		strcpy(readBuffer, pThemeExt->HousesText);
-
-		bool getHouse = false;
-		for (char* cur = strtok_s(readBuffer, ",", &context); cur; cur = strtok_s(nullptr, ",", &context))
+		for (const int currentIndex : *pVector)
 		{
-			if (!strcmp(pPlayer->Type->get_ID(), cur))
-			{
-				getHouse = true;
-				break;
-			}
+			if (currentIndex != index)
+				continue;
+
+			return true;
 		}
 
-		if (!getHouse)
+		return false;
+	};
+
+	if (!pSides->empty())
+	{
+		if (!Contains(pSides, sideIndex))
 			return ReturnFalse;
 	}
-	
-	if (strcmp(pThemeExt->NegHousesText, ""))
+	else
 	{
-		char* context = nullptr;
-		char readBuffer[2048];
-		strcpy(readBuffer, pThemeExt->NegHousesText);
+		const int SideIndex = pThemeExt->Side;
 
-		bool getHouse = false;
-		for (char* cur = strtok_s(readBuffer, ",", &context); cur; cur = strtok_s(nullptr, ",", &context))
-		{
-			if (!strcmp(pPlayer->Type->get_ID(), cur))
-			{
-				getHouse = true;
-				break;
-			}
-		}
+		if (SideIndex >= 0 && sideIndex != SideIndex)
+			return ReturnFalse;
+	}
 
-		if (getHouse)
+	const int PlayerIndex = pPlayer->Type->GetArrayIndex();
+	const auto pHouses = &pThemeExt->Houses;
+	const auto pNegHouses = &pThemeExt->NegHouses;
+
+	if (!pHouses->empty())
+	{
+		if (!Contains(pHouses, PlayerIndex))
+			return ReturnFalse;
+	}
+	else if (!pNegHouses->empty())
+	{
+		if (Contains(pNegHouses, PlayerIndex))
 			return ReturnFalse;
 	}
 
 	return 0;
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
-DEFINE_HOOK(0x7209B0, ThemeClass_GetUIName, 0x7)
-{
-	GET_STACK(int, index, 0x4);
-	enum { ReturnValue = 0x7209C6 };
-
-	auto const ThemeExt = (index >= 0 && int(ThemeExt::Array.size()) > index) ?
-		&ThemeExt::Array.at(index) : nullptr;
-
-	if (!ThemeExt)
-	{
-		R->EAX(L"\0");
-		return ReturnValue;
-	}
-
-	auto const& pThemeExt = *ThemeExt;
-	R->EAX(StringTable::LoadStringA(pThemeExt->UIName));
-	return ReturnValue;
-}
-
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
 DEFINE_HOOK(0x720A69, ThemeClass_AI_Play, 0x8)
 {
 	GET(ThemeClass*, pThis, ESI);
@@ -149,10 +220,9 @@ DEFINE_HOOK(0x720A69, ThemeClass_AI_Play, 0x8)
 	{
 		auto& pThemeExt = ThemeExt::Array.at(pThis->LastTheme);
 
-		if (pThemeExt && !pThemeExt->Repeat &&
-			strcmp(pThemeExt->NextText, ""))
+		if (pThemeExt && !pThemeExt->Repeat)
 		{
-			int next = ThemeClass::Instance->FindIndex(pThemeExt->NextText);
+			const int next = pThemeExt->Next;
 
 			if (next >= 0 && next != pThis->LastTheme)
 				idx = next;
@@ -163,7 +233,7 @@ DEFINE_HOOK(0x720A69, ThemeClass_AI_Play, 0x8)
 	return SkipGameCode;
 }
 
-// 这里不欢迎名为邻座艾莉同学的石灰级玩家
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
 DEFINE_HOOK(0x721086, IStream_LoadGame_sub721040_PlayTheme, 0x5)
 {
 	GET_STACK(int, ThemeIdx, STACK_OFFSET(0xC, 0x4));
@@ -174,16 +244,27 @@ DEFINE_HOOK(0x721086, IStream_LoadGame_sub721040_PlayTheme, 0x5)
 	{
 		if (auto& pThemeExt = ThemeExt::Array.at(idx))
 		{
-			if (strcmp(pThemeExt->PreviousText, ""))
-			{
-				int previous = ThemeClass::Instance->FindIndex(pThemeExt->PreviousText);
+			const int previous = pThemeExt->Previous;
 
-				if (previous >= 0 && previous != idx)
-					idx = previous;
-			}
+			if (previous >= 0 && previous != idx)
+				idx = previous;
 		}
 	}
 
 	ThemeClass::Instance->Play(idx);
 	return 0x721095;
+}
+
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
+DEFINE_HOOK(0x720546, ThemeClass_SKipReadSide, 0x6)
+{
+	return 0x72055A;
+}
+
+// 杩欓噷涓嶆杩庤嚜绉癢IC澶т娇鐨勭煶鐏扮骇鐜╁
+DEFINE_HOOK_AGAIN(0x679C92, ThemeClass_LoadFromINI, 0x7)
+DEFINE_HOOK(0x67E6E5, ThemeClass_LoadFromINI, 0x7)
+{
+	LoadFromINI();
+	return 0;
 }
